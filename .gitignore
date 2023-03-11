@@ -3,7 +3,10 @@ __pycache__/
 exchange.log
 info.dat
 match_events.csv
+ready_trader_go
 ready_trader_go/__pycache__/
 ready_trader_go/hud/__pycahce__/
 ready_trader_go?hud/main_window/__pycahce__/
 score_board.csv
+rtg.py
+COPYING.txt
