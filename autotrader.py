@@ -46,6 +46,10 @@ class AutoTrader(BaseAutoTrader):
         self.etf_price = pd.Series(dtype='float64')
         self.ratio = pd.Series(dtype='float64')
 
+        #intialise moving averages which will change
+        self.ratios_mavg5 = 0
+        self.ratios_mavag20 = 0
+
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
 
@@ -102,30 +106,41 @@ class AutoTrader(BaseAutoTrader):
             self.ratio = pd.concat([self.ratio,newratio], ignore_index=True)
             # print("==RATIO==")
             # print(self.ratio)
-            
 
-            # Calculate Z-score of the ratio
-            newzscore = pd.Series(self.ratio.iloc[-1]/self.etf_price.iloc[-1])
-            self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
-
-            
+    
 
             # Moving averages
-            self.ratios_mavg5 = self.ratio.rolling(window=5, center=False).mean()
-            self.ratios_mavag20 = self.ratio.rolling(window=20, center=False).mean()
+            # ratios_mavag5 will be recalculated every 5 orders
+            if self.ratio.size % 5 == 0:
+                    Last5Ratio = self.ratio.iloc[-5:]
+                    print("my last 5 ratios were",Last5Ratio)
+                    self.ratios_mavg5 = self.ratio.iloc[-5:].mean()
+
+            # ratios_mavag20 will be recalculated every 20 orders.
+            # if self.ratio.size % 20 == 0:
+            #     #the last 20 moving average
+            #     Last20Ratio = []
+            #     for i in range(-20, 0, 1):
+            #         print("adding ratio ", self.ratio.iloc[i])
+            #         if self.ratio.iloc[i] != "inf" and self.ratio.iloc[i] == "nan":
+            #             Last20Ratio = Last20Ratio.append(self.ratio.iloc[i])
+
+            #     self.ratios_mavag20 = sum(Last20Ratio)/len(Last20Ratio)
+
+            # print(self.ratios_mavag20)
 
             self.std_20 = self.ratio.rolling(window=20, center=False).std()
             self.zscore_20_5 = (self.ratios_mavg5 - self.ratios_mavag20) / self.std_20
             # Buy and Sell signals
             # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
             # 1 we sell
-            print(self.zscore_20_5.iloc[0])
-            if self.zscore_20_5.iloc[0] > -1:
-                print("Buy")
-            elif self.zscore_20_5.iloc[0] < 1:
-                print("Sell")
-            else:
-                print("No Buy or Sell signal")
+            # print(self.zscore_20_5.iloc[0])
+            # if self.zscore_20_5.iloc[0] > -1:
+            #     print("Buy")
+            # elif self.zscore_20_5.iloc[0] < 1:
+            #     print("Sell")
+            # else:
+            #     print("No Buy or Sell signal")
 
         except Exception as e:
             print("Exception")
