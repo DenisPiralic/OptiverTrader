@@ -86,12 +86,17 @@ class AutoTrader(BaseAutoTrader):
         else:
             self.etf_price = pd.concat([self.midpoint_price, self.etf_price], ignore_index=True)
 
-        # Generate spread values
-
         # Find the price ratio of the Future and ETF price
         # Future / ETF
+        self.ratio = self.future_price[:-1] / self.etf_price[:-1]
 
         # Calculate Z-score of the ratio
+        self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
+        print(self.zscore)
+        
+
+        #print(self.zscore)
+        print('\n')
 
         # Moving averages
 
