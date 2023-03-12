@@ -111,10 +111,14 @@ class AutoTrader(BaseAutoTrader):
 
             # Moving averages
             # ratios_mavag5 will be recalculated every 5 orders
+            #for the first bit 
             if self.ratio.size % 5 == 0:
                     Last5Ratio = self.ratio.iloc[-5:]
-                    print("my last 5 ratios were",Last5Ratio)
+                    
+                    print("my last 5 ratios were \n",Last5Ratio)
                     self.ratios_mavg5 = self.ratio.iloc[-5:].mean()
+                    
+            print(self.ratios_mavg5)
 
             # ratios_mavag20 will be recalculated every 20 orders.
             # if self.ratio.size % 20 == 0:
