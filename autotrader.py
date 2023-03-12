@@ -45,10 +45,12 @@ class AutoTrader(BaseAutoTrader):
         self.future_price = pd.Series(dtype='float64')
         self.etf_price = pd.Series(dtype='float64')
         self.ratio = pd.Series(dtype='float64')
+        self.zscore_20_5 = pd.Series(dtype='float64')
 
         #intialise moving averages which will change
         self.ratios_mavg5 = 0
-        self.ratios_mavag20 = 0
+        self.ratios_mavg20 = 0
+        self.ratios_std20 = 0
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -113,28 +115,38 @@ class AutoTrader(BaseAutoTrader):
             # ratios_mavag5 will be recalculated every 5 orders
             #for the first bit 
             if self.ratio.size % 5 == 0:
-                    Last5Ratio = self.ratio.iloc[-5:]
+                    last_five = self.ratio.iloc[-5:]
+                    #convert inf values to NaN
+                    last_five = last_five.replace([np.inf, -np.inf], np.nan)
+                    # Remove NaN values
+                    last_five = last_five.dropna()
+                    #calculate the mean of the last five values    
+                    self.ratios_mavg5 = last_five.mean()
                     
-                    print("my last 5 ratios were \n",Last5Ratio)
-                    self.ratios_mavg5 = self.ratio.iloc[-5:].mean()
+
+            # ratios_mavag20 and standard deviation will be recalculated every 20 orders.
+            if self.ratio.size % 20 == 0:
+                    #grab the last twenty ratios
+                    last_twen = self.ratio.iloc[-20:]
+
+                    #SANITISE
+                    #convert inf values to NaN
+                    last_twen = last_twen.replace([np.inf, -np.inf], np.nan)
+                    # Remove NaN values
+                    last_twen = last_twen.dropna()
+
+                    #calculate the mean of the last twenty values    
+                    self.ratios_mavg20 = last_twen.mean()
+                    #calculate the standard deviation of the last twenty values
+                    self.ratios_std20 = last_twen.std() 
+
                     
-            print(self.ratios_mavg5)
 
-            # ratios_mavag20 will be recalculated every 20 orders.
-            # if self.ratio.size % 20 == 0:
-            #     #the last 20 moving average
-            #     Last20Ratio = []
-            #     for i in range(-20, 0, 1):
-            #         print("adding ratio ", self.ratio.iloc[i])
-            #         if self.ratio.iloc[i] != "inf" and self.ratio.iloc[i] == "nan":
-            #             Last20Ratio = Last20Ratio.append(self.ratio.iloc[i])
+            newZscore = pd.Series((self.ratios_mavg5 - self.ratios_mavg20) / self.ratios_std20)
+            #print("(MAV5:",self.ratios_mavg5,"-MAV20:",self.ratios_mavag20,")/STD20:", self.ratios_std20,"=",newZscore)
+            self.zscore_20_5 = pd.concat([self.zscore_20_5,newZscore], ignore_index=True)
+            print(newZscore)
 
-            #     self.ratios_mavag20 = sum(Last20Ratio)/len(Last20Ratio)
-
-            # print(self.ratios_mavag20)
-
-            self.std_20 = self.ratio.rolling(window=20, center=False).std()
-            self.zscore_20_5 = (self.ratios_mavg5 - self.ratios_mavag20) / self.std_20
             # Buy and Sell signals
             # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
             # 1 we sell
