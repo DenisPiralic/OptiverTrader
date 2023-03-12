@@ -89,22 +89,23 @@ class AutoTrader(BaseAutoTrader):
                 self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
 
             
-            print("==Future Prices==")
-            print(self.future_price)
-            print(self.future_price.iloc[-1])
-            print("==ETF Prices==")
-            print(self.etf_price)
-            print(self.etf_price.iloc[-1])
+            # print("==Future Prices==")
+            # print(self.future_price)
+            # print(self.future_price.iloc[-1])
+            # print("==ETF Prices==")
+            # print(self.etf_price)
+            # print(self.etf_price.iloc[-1])
 
             
             # Find the price ratio of the Future and ETF price
             newratio = pd.Series(self.future_price.iloc[-1]/self.etf_price.iloc[-1])
             self.ratio = pd.concat([self.ratio,newratio], ignore_index=True)
-            print("==RATIO==")
-            print(self.ratio)
-            #self.ratio = self.future_price/self.etf_price
+            # print("==RATIO==")
+            # print(self.ratio)
+            
 
             # Calculate Z-score of the ratio
+            newzscore = pd.Series(self.ratio.iloc[-1]/self.etf_price.iloc[-1])
             self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
 
             
@@ -118,13 +119,13 @@ class AutoTrader(BaseAutoTrader):
             # Buy and Sell signals
             # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
             # 1 we sell
-            # print(self.zscore_20_5.iloc[0])
-            # if self.zscore_20_5.iloc[0] > -1:
-            #     print("Buy")
-            # elif self.zscore_20_5.iloc[0] < 1:
-            #     print("Sell")
-            # else:
-            #     print("No Buy or Sell signal")
+            print(self.zscore_20_5.iloc[0])
+            if self.zscore_20_5.iloc[0] > -1:
+                print("Buy")
+            elif self.zscore_20_5.iloc[0] < 1:
+                print("Sell")
+            else:
+                print("No Buy or Sell signal")
 
         except Exception as e:
             print("Exception")
