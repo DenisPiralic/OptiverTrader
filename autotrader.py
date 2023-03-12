@@ -44,6 +44,7 @@ class AutoTrader(BaseAutoTrader):
         # Pandas series to hold midpoint prices for future and etf
         self.future_price = pd.Series(dtype='float64')
         self.etf_price = pd.Series(dtype='float64')
+        self.ratio = pd.Series(dtype='float64')
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -83,34 +84,47 @@ class AutoTrader(BaseAutoTrader):
 
             # Add midpoint to the instrument price Series
             if instrument == 0:
-                self.future_price = pd.concat([self.midpoint_price, self.future_price], ignore_index=True)
+                self.future_price = pd.concat([self.future_price, self.midpoint_price], ignore_index=True)
             else:
-                self.etf_price = pd.concat([self.midpoint_price, self.etf_price], ignore_index=True)
+                self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
 
-        
-                # Find the price ratio of the Future and ETF price
-                # Future / ETF
-                self.ratio = self.future_price[:-1] / self.etf_price[:-1]
+            
+            print("==Future Prices==")
+            print(self.future_price)
+            print(self.future_price.iloc[-1])
+            print("==ETF Prices==")
+            print(self.etf_price)
+            print(self.etf_price.iloc[-1])
 
-                # Calculate Z-score of the ratio
-                #self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
+            
+            # Find the price ratio of the Future and ETF price
+            newratio = pd.Series(self.future_price.iloc[-1]/self.etf_price.iloc[-1])
+            self.ratio = pd.concat([self.ratio,newratio], ignore_index=True)
+            print("==RATIO==")
+            print(self.ratio)
+            #self.ratio = self.future_price/self.etf_price
 
-                # # Moving averages
-                self.ratios_mavg5 = self.ratio.rolling(window=5, center=False).mean()
-                self.ratios_mavag20 = self.ratio.rolling(window=20, center=False).mean()
+            # Calculate Z-score of the ratio
+            self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
 
-                self.std_20 = self.ratio.rolling(window=20, center=False).std()
-                self.zscore_20_5 = (self.ratios_mavg5 - self.ratios_mavag20) / self.std_20
-                # Buy and Sell signals
-                # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
-                # 1 we sell
-                print(self.zscore_20_5.iloc[-1])
-                if self.zscore_20_5.iloc[-1] > -1:
-                    print("Buy")
-                elif self.zscore_20_5.iloc[-1] < 1:
-                    print("Sell")
-                else:
-                    print("No Buy or Sell signal")
+            
+
+            # Moving averages
+            self.ratios_mavg5 = self.ratio.rolling(window=5, center=False).mean()
+            self.ratios_mavag20 = self.ratio.rolling(window=20, center=False).mean()
+
+            self.std_20 = self.ratio.rolling(window=20, center=False).std()
+            self.zscore_20_5 = (self.ratios_mavg5 - self.ratios_mavag20) / self.std_20
+            # Buy and Sell signals
+            # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
+            # 1 we sell
+            # print(self.zscore_20_5.iloc[0])
+            # if self.zscore_20_5.iloc[0] > -1:
+            #     print("Buy")
+            # elif self.zscore_20_5.iloc[0] < 1:
+            #     print("Sell")
+            # else:
+            #     print("No Buy or Sell signal")
 
         except Exception as e:
             print("Exception")
