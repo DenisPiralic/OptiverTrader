@@ -17,8 +17,6 @@
 #     <https://www.gnu.org/licenses/>.
 import asyncio
 import itertools
-import pandas as pd
-import numpy as np
 
 from typing import List
 
@@ -33,6 +31,15 @@ MAX_ASK_NEAREST_TICK = MAXIMUM_ASK // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 
 
 class AutoTrader(BaseAutoTrader):
+    """Example Auto-trader.
+
+    When it starts this auto-trader places ten-lot bid and ask orders at the
+    current best-bid and best-ask prices respectively. Thereafter, if it has
+    a long position (it has bought more lots than it has sold) it reduces its
+    bid and ask prices. Conversely, if it has a short position (it has sold
+    more lots than it has bought) then it increases its bid and ask prices.
+    """
+
     def __init__(self, loop: asyncio.AbstractEventLoop, team_name: str, secret: str):
         """Initialise a new instance of the AutoTrader class."""
         super().__init__(loop, team_name, secret)
@@ -40,10 +47,6 @@ class AutoTrader(BaseAutoTrader):
         self.bids = set()
         self.asks = set()
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
-
-        # Pandas series to hold midpoint prices for future and etf
-        self.future_price = pd.Series(dtype='float64')
-        self.etf_price = pd.Series(dtype='float64')
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -76,12 +79,29 @@ class AutoTrader(BaseAutoTrader):
         """
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
                          sequence_number)
-        # print(bid_prices)
-        # print(ask_prices)
-        print("%d best bid price %d" % (instrument, bid_prices[0]))
-        print("%d best ask price %d" % (instrument, ask_prices[0]))
-        print("%d Midpoint price %d" % (instrument, ((bid_prices[0] + ask_prices[0]) / 2.0)))
+        if instrument == Instrument.FUTURE:
+            price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
+            new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
+            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
 
+            if self.bid_id != 0 and new_bid_price not in (self.bid_price, 0):
+                self.send_cancel_order(self.bid_id)
+                self.bid_id = 0
+            if self.ask_id != 0 and new_ask_price not in (self.ask_price, 0):
+                self.send_cancel_order(self.ask_id)
+                self.ask_id = 0
+
+            if self.bid_id == 0 and new_bid_price != 0 and self.position < POSITION_LIMIT:
+                self.bid_id = next(self.order_ids)
+                self.bid_price = new_bid_price
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.bids.add(self.bid_id)
+
+            if self.ask_id == 0 and new_ask_price != 0 and self.position > -POSITION_LIMIT:
+                self.ask_id = next(self.order_ids)
+                self.ask_price = new_ask_price
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.asks.add(self.ask_id)
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
