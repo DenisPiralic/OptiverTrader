@@ -76,12 +76,26 @@ class AutoTrader(BaseAutoTrader):
         """
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
                          sequence_number)
-        # print(bid_prices)
-        # print(ask_prices)
-        print("%d best bid price %d" % (instrument, bid_prices[0]))
-        print("%d best ask price %d" % (instrument, ask_prices[0]))
-        print("%d Midpoint price %d" % (instrument, ((bid_prices[0] + ask_prices[0]) / 2.0)))
+        
+        # Generate midpoint price
+        self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 2.0)
 
+        # Add midpoint to the instrument price Series
+        if instrument == 0:
+            self.future_price = pd.concat([self.midpoint_price, self.future_price], ignore_index=True)
+        else:
+            self.etf_price = pd.concat([self.midpoint_price, self.etf_price], ignore_index=True)
+
+        # Generate spread values
+
+        # Find the price ratio of the Future and ETF price
+        # Future / ETF
+
+        # Calculate Z-score of the ratio
+
+        # Moving averages
+
+        # Buy and Sell signals
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
