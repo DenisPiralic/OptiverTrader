@@ -74,33 +74,47 @@ class AutoTrader(BaseAutoTrader):
         prices are reported along with the volume available at each of those
         price levels.
         """
-        self.logger.info("received order book for instrument %d with sequence number %d", instrument,
-                         sequence_number)
+        try:
+            self.logger.info("received order book for instrument %d with sequence number %d", instrument,
+                            sequence_number)
+            
+            # Generate midpoint price
+            self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 2.0)
+
+            # Add midpoint to the instrument price Series
+            if instrument == 0:
+                self.future_price = pd.concat([self.midpoint_price, self.future_price], ignore_index=True)
+            else:
+                self.etf_price = pd.concat([self.midpoint_price, self.etf_price], ignore_index=True)
+
         
-        # Generate midpoint price
-        self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 2.0)
+                # Find the price ratio of the Future and ETF price
+                # Future / ETF
+                self.ratio = self.future_price[:-1] / self.etf_price[:-1]
 
-        # Add midpoint to the instrument price Series
-        if instrument == 0:
-            self.future_price = pd.concat([self.midpoint_price, self.future_price], ignore_index=True)
-        else:
-            self.etf_price = pd.concat([self.midpoint_price, self.etf_price], ignore_index=True)
+                # Calculate Z-score of the ratio
+                #self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
 
-        # Find the price ratio of the Future and ETF price
-        # Future / ETF
-        self.ratio = self.future_price[:-1] / self.etf_price[:-1]
+                # # Moving averages
+                self.ratios_mavg5 = self.ratio.rolling(window=5, center=False).mean()
+                self.ratios_mavag20 = self.ratio.rolling(window=20, center=False).mean()
 
-        # Calculate Z-score of the ratio
-        self.zscore = (self.ratio - self.ratio.mean()) / self.ratio.std()
-        print(self.zscore)
-        
+                self.std_20 = self.ratio.rolling(window=20, center=False).std()
+                self.zscore_20_5 = (self.ratios_mavg5 - self.ratios_mavag20) / self.std_20
+                # Buy and Sell signals
+                # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
+                # 1 we sell
+                print(self.zscore_20_5.iloc[-1])
+                if self.zscore_20_5.iloc[-1] > -1:
+                    print("Buy")
+                elif self.zscore_20_5.iloc[-1] < 1:
+                    print("Sell")
+                else:
+                    print("No Buy or Sell signal")
 
-        #print(self.zscore)
-        print('\n')
-
-        # Moving averages
-
-        # Buy and Sell signals
+        except Exception as e:
+            print("Exception")
+            print(e)
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
