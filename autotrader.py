@@ -45,6 +45,9 @@ class AutoTrader(BaseAutoTrader):
         self.future_price = pd.Series(dtype='float64')
         self.etf_price = pd.Series(dtype='float64')
 
+        self.previous_signal = None
+        self.current_signal = None
+
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
 
@@ -98,13 +101,25 @@ class AutoTrader(BaseAutoTrader):
             # Buy and Sell signals
             # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
             # 1 we sell
-            self.last_zscore = self.zscore.iloc[-1]
-            if self.last_zscore < -1:
+            if self.zscore.size > 0:
+                self.last_zscore = self.zscore.iloc[-1]
+
+                if self.last_zscore < -1:
+                    self.current_signal = "Buy"
+                elif self.last_zscore > 1:
+                    self.current_signal = "Sell"
+                else:
+                    self.current_signal = "No signal"
+
+            if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
                 print("Buy")
-            elif self.last_zscore > 1:
+                self.previous_signal = "Buy"
+            elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
                 print("Sell")
-            else:
+                self.previous_signal = "Sell"
+            elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
                 print("No signal")
+                self.previous_signal = "No signal"
 
             print("\n")
         except Exception as e:
