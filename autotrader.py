@@ -45,6 +45,7 @@ class AutoTrader(BaseAutoTrader):
         self.future_price = pd.Series(dtype='float64')
         self.etf_price = pd.Series(dtype='float64')
 
+        # Two variables to hold previous and current sell signal
         self.previous_signal = None
         self.current_signal = None
 
@@ -84,8 +85,11 @@ class AutoTrader(BaseAutoTrader):
             self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 200.0)
 
             # Add midpoint to the instrument price Series
+            # Instrument 0 means future price
             if instrument == 0:
                 self.future_price = pd.concat([self.future_price, self.midpoint_price], ignore_index=True)
+
+            # Instrument 1 means ETF price
             else:
                 self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
 
@@ -93,6 +97,7 @@ class AutoTrader(BaseAutoTrader):
             # Future / ETF
             # Removing anomalous first and last value
             self.ratio = self.future_price[1:-1] / self.etf_price[1:-1]
+
 
             # Calculate Z-score of the ratio
             # Removing final anomalous result
@@ -102,26 +107,37 @@ class AutoTrader(BaseAutoTrader):
             # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
             # 1 we sell
             if self.zscore.size > 0:
+                # Get the last ZScore
                 self.last_zscore = self.zscore.iloc[-1]
 
+                # Buy signal
                 if self.last_zscore < -1:
                     self.current_signal = "Buy"
+                # Sell signal
                 elif self.last_zscore > 1:
                     self.current_signal = "Sell"
-                else:
-                    self.current_signal = "No signal"
+                
+                # Neither buy nor sell
+                #else:
+                    #self.current_signal = "No signal"
 
+
+            # Only produce a signal if there is a change in the signal
+            # This will result in alternating buy and sell signals
+            # Signal has changed to buy
             if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
                 print("Buy")
                 self.previous_signal = "Buy"
+            # Signal has changed to sell
             elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
                 print("Sell")
                 self.previous_signal = "Sell"
-            elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
-                print("No signal")
-                self.previous_signal = "No signal"
+            
+            # Signal has changed to No signal
+            #elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
+                #print("No signal")
+                #self.previous_signal = "No signal"
 
-            print("\n")
         except Exception as e:
             print(e)
 
