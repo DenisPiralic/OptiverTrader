@@ -121,25 +121,36 @@ class AutoTrader(BaseAutoTrader):
                 #else:
                     #self.current_signal = "No signal"
 
+            price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
+            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
+            new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
 
             # Only produce a signal if there is a change in the signal
             # This will result in alternating buy and sell signals
             # Signal has changed to buy
             if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
+                print("Buy signal")
                 # Buy Future and Sell ETF
-                self.bid_id = next(self.order_ids)
 
-                # Buy the future
-                self.send_insert_order(self.bid_id)
-
+                self.ask_id = next(self.order_ids)
+                self.ask_price = new_ask_price
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.asks.add(self.ask_id)
+                print("Order sent to order book")
                 # Set previous signal for later use
                 self.previous_signal = "Buy"
 
             # Signal has changed to sell
             elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
-                # Sell Future and Sell ETF
+                print("Sell signal")
+                # Sell Future and Buy ETF
 
+                self.bid_id = next(self.order_ids)
+                self.bid_price = new_bid_price
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.bids.add(self.bid_id)
 
+                print("Order sent to order book")
                 # Set previous signal for later use
                 self.previous_signal = "Sell"
             
