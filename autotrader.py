@@ -45,6 +45,10 @@ class AutoTrader(BaseAutoTrader):
         self.future_price = pd.Series(dtype='float64')
         self.etf_price = pd.Series(dtype='float64')
 
+        # Two variables to hold previous and current sell signal
+        self.previous_signal = None
+        self.current_signal = None
+
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
 
@@ -75,27 +79,77 @@ class AutoTrader(BaseAutoTrader):
         price levels.
         """
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
-                         sequence_number)
-        
-        # Generate midpoint price
-        self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 2.0)
+                        sequence_number)
+        try:
+            # Generate midpoint price
+            self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 200.0)
 
-        # Add midpoint to the instrument price Series
-        if instrument == 0:
-            self.future_price = pd.concat([self.midpoint_price, self.future_price], ignore_index=True)
-        else:
-            self.etf_price = pd.concat([self.midpoint_price, self.etf_price], ignore_index=True)
+            # Add midpoint to the instrument price Series
+            # Instrument 0 means future price
+            if instrument == 0:
+                self.future_price = pd.concat([self.future_price, self.midpoint_price], ignore_index=True)
 
-        # Generate spread values
+            # Instrument 1 means ETF price
+            else:
+                self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
 
-        # Find the price ratio of the Future and ETF price
-        # Future / ETF
+            # Find the price ratio of the Future and ETF price
+            # Future / ETF
+            # Removing anomalous first and last value
+            self.ratio = self.future_price[1:-1] / self.etf_price[1:-1]
 
-        # Calculate Z-score of the ratio
 
-        # Moving averages
+            # Calculate Z-score of the ratio
+            # Removing final anomalous result
+            self.zscore = ((self.ratio - self.ratio.mean()) / self.ratio.std())[:-1]
 
-        # Buy and Sell signals
+            # Buy and Sell signals
+            # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
+            # 1 we sell
+            if self.zscore.size > 0:
+                # Get the last ZScore
+                self.last_zscore = self.zscore.iloc[-1]
+
+                # Buy signal
+                if self.last_zscore < -1:
+                    self.current_signal = "Buy"
+                # Sell signal
+                elif self.last_zscore > 1:
+                    self.current_signal = "Sell"
+                
+                # Neither buy nor sell
+                #else:
+                    #self.current_signal = "No signal"
+
+
+            # Only produce a signal if there is a change in the signal
+            # This will result in alternating buy and sell signals
+            # Signal has changed to buy
+            if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
+                # Buy Future and Sell ETF
+                self.bid_id = next(self.order_ids)
+
+                # Buy the future
+                self.send_insert_order(self.bid_id)
+
+                # Set previous signal for later use
+                self.previous_signal = "Buy"
+
+            # Signal has changed to sell
+            elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
+                # Sell Future and Sell ETF
+
+
+                # Set previous signal for later use
+                self.previous_signal = "Sell"
+            
+            # Signal has changed to No signal
+            #elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
+                #print("No signal")
+                #self.previous_signal = "No signal"
+
+        except Exception as e:
+            print(e)
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
