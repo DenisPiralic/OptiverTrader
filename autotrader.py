@@ -134,7 +134,7 @@ class AutoTrader(BaseAutoTrader):
 
                 self.ask_id = next(self.order_ids)
                 self.ask_price = new_ask_price
-                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
                 self.asks.add(self.ask_id)
                 print("Order sent to order book")
                 # Set previous signal for later use
@@ -147,7 +147,7 @@ class AutoTrader(BaseAutoTrader):
 
                 self.bid_id = next(self.order_ids)
                 self.bid_price = new_bid_price
-                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
                 self.bids.add(self.bid_id)
 
                 print("Order sent to order book")
