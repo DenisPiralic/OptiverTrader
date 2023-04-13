@@ -126,11 +126,21 @@ class AutoTrader(BaseAutoTrader):
             # This will result in alternating buy and sell signals
             # Signal has changed to buy
             if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
-                print("Buy")
+                # Buy Future and Sell ETF
+                self.bid_id = next(self.order_ids)
+
+                # Buy the future
+                self.send_insert_order(self.bid_id)
+
+                # Set previous signal for later use
                 self.previous_signal = "Buy"
+
             # Signal has changed to sell
             elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
-                print("Sell")
+                # Sell Future and Sell ETF
+
+
+                # Set previous signal for later use
                 self.previous_signal = "Sell"
             
             # Signal has changed to No signal
