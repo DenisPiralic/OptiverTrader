@@ -17,8 +17,6 @@
 #     <https://www.gnu.org/licenses/>.
 import asyncio
 import itertools
-import pandas as pd
-import numpy as np
 
 from typing import List
 
@@ -33,6 +31,15 @@ MAX_ASK_NEAREST_TICK = MAXIMUM_ASK // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 
 
 class AutoTrader(BaseAutoTrader):
+    """Example Auto-trader.
+
+    When it starts this auto-trader places ten-lot bid and ask orders at the
+    current best-bid and best-ask prices respectively. Thereafter, if it has
+    a long position (it has bought more lots than it has sold) it reduces its
+    bid and ask prices. Conversely, if it has a short position (it has sold
+    more lots than it has bought) then it increases its bid and ask prices.
+    """
+
     def __init__(self, loop: asyncio.AbstractEventLoop, team_name: str, secret: str):
         """Initialise a new instance of the AutoTrader class."""
         super().__init__(loop, team_name, secret)
@@ -40,14 +47,6 @@ class AutoTrader(BaseAutoTrader):
         self.bids = set()
         self.asks = set()
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
-
-        # Pandas series to hold midpoint prices for future and etf
-        self.future_price = pd.Series(dtype='float64')
-        self.etf_price = pd.Series(dtype='float64')
-
-        # Two variables to hold previous and current sell signal
-        self.previous_signal = None
-        self.current_signal = None
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -79,88 +78,30 @@ class AutoTrader(BaseAutoTrader):
         price levels.
         """
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
-                        sequence_number)
-        try:
-            # Generate midpoint price
-            self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 200.0)
-
-            # Add midpoint to the instrument price Series
-            # Instrument 0 means future price
-            if instrument == 0:
-                self.future_price = pd.concat([self.future_price, self.midpoint_price], ignore_index=True)
-
-            # Instrument 1 means ETF price
-            else:
-                self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
-
-            # Find the price ratio of the Future and ETF price
-            # Future / ETF
-            # Removing anomalous first and last value
-            self.ratio = self.future_price[1:-1] / self.etf_price[1:-1]
-
-
-            # Calculate Z-score of the ratio
-            # Removing final anomalous result
-            self.zscore = ((self.ratio - self.ratio.mean()) / self.ratio.std())[:-1]
-
-            # Buy and Sell signals
-            # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
-            # 1 we sell
-            if self.zscore.size > 0:
-                # Get the last ZScore
-                self.last_zscore = self.zscore.iloc[-1]
-
-                # Buy signal
-                if self.last_zscore < -1:
-                    self.current_signal = "Buy"
-                # Sell signal
-                elif self.last_zscore > 1:
-                    self.current_signal = "Sell"
-                
-                # Neither buy nor sell
-                #else:
-                    #self.current_signal = "No signal"
-
+                         sequence_number)
+        if instrument == Instrument.FUTURE:
             price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
-            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
+            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
 
-            # Only produce a signal if there is a change in the signal
-            # This will result in alternating buy and sell signals
-            # Signal has changed to buy
-            if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
-                print("Buy signal")
-                # Buy Future and Sell ETF
+            if self.bid_id != 0 and new_bid_price not in (self.bid_price, 0):
+                self.send_cancel_order(self.bid_id)
+                self.bid_id = 0
+            if self.ask_id != 0 and new_ask_price not in (self.ask_price, 0):
+                self.send_cancel_order(self.ask_id)
+                self.ask_id = 0
 
-                self.ask_id = next(self.order_ids)
-                self.ask_price = new_ask_price
-                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
-                self.asks.add(self.ask_id)
-                print("Order sent to order book")
-                # Set previous signal for later use
-                self.previous_signal = "Buy"
-
-            # Signal has changed to sell
-            elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
-                print("Sell signal")
-                # Sell Future and Buy ETF
-
+            if self.bid_id == 0 and new_bid_price != 0 and self.position < POSITION_LIMIT:
                 self.bid_id = next(self.order_ids)
                 self.bid_price = new_bid_price
-                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
                 self.bids.add(self.bid_id)
 
-                print("Order sent to order book")
-                # Set previous signal for later use
-                self.previous_signal = "Sell"
-            
-            # Signal has changed to No signal
-            #elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
-                #print("No signal")
-                #self.previous_signal = "No signal"
-
-        except Exception as e:
-            print(e)
+            if self.ask_id == 0 and new_ask_price != 0 and self.position > -POSITION_LIMIT:
+                self.ask_id = next(self.order_ids)
+                self.ask_price = new_ask_price
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.asks.add(self.ask_id)
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
