@@ -52,6 +52,10 @@ class AutoTrader(BaseAutoTrader):
         self.ratios_mavg20 = 0
         self.ratios_std20 = 0
 
+        #two variables to hold previous and current sell signal
+        self.previous_signal = None
+        self.current_signal = None
+
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
 
@@ -85,8 +89,10 @@ class AutoTrader(BaseAutoTrader):
             self.logger.info("received order book for instrument %d with sequence number %d", instrument,
                             sequence_number)
             
+
+
             # Generate midpoint price
-            self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 2.0)
+            self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 200.0)
 
             # Add midpoint to the instrument price Series
             if instrument == 0:
@@ -95,21 +101,13 @@ class AutoTrader(BaseAutoTrader):
                 self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
 
             
-            # print("==Future Prices==")
-            # print(self.future_price)
-            # print(self.future_price.iloc[-1])
-            # print("==ETF Prices==")
-            # print(self.etf_price)
-            # print(self.etf_price.iloc[-1])
-
-            
             # Find the price ratio of the Future and ETF price
+            #we want it to do it as a new ratio to add to a list
+            #if we calculate the full list everytime it will not be as effecient
             newratio = pd.Series(self.future_price.iloc[-1]/self.etf_price.iloc[-1])
             self.ratio = pd.concat([self.ratio,newratio], ignore_index=True)
-            # print("==RATIO==")
-            # print(self.ratio)
 
-    
+            
 
             # Moving averages
             # ratios_mavag5 will be recalculated every 5 orders
@@ -123,6 +121,7 @@ class AutoTrader(BaseAutoTrader):
                     #calculate the mean of the last five values    
                     self.ratios_mavg5 = last_five.mean()
                     
+            
 
             # ratios_mavag20 and standard deviation will be recalculated every 20 orders.
             if self.ratio.size % 20 == 0:
@@ -140,27 +139,64 @@ class AutoTrader(BaseAutoTrader):
                     #calculate the standard deviation of the last twenty values
                     self.ratios_std20 = last_twen.std() 
 
-                    
 
             newZscore = pd.Series((self.ratios_mavg5 - self.ratios_mavg20) / self.ratios_std20)
-            #print("(MAV5:",self.ratios_mavg5,"-MAV20:",self.ratios_mavag20,")/STD20:", self.ratios_std20,"=",newZscore)
             self.zscore_20_5 = pd.concat([self.zscore_20_5,newZscore], ignore_index=True)
-            print(newZscore)
+            print("(MAV5:",self.ratios_mavg5,"-MAV20:",self.ratios_mavg20,")/STD20:", self.ratios_std20,"=",self.zscore_20_5.iloc[-1])
+
+            #print("(MAV5:",self.ratios_mavg5,"-MAV20:",self.ratios_mavg20,")/STD20:", self.ratios_std20,"=",self.zscore_20_5[-1])
+            
 
             # Buy and Sell signals
-            # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
+            # Whenever the z score is below -1 we buy and whenever the z score is more than
             # 1 we sell
-            # print(self.zscore_20_5.iloc[0])
-            # if self.zscore_20_5.iloc[0] > -1:
-            #     print("Buy")
-            # elif self.zscore_20_5.iloc[0] < 1:
-            #     print("Sell")
-            # else:
-            #     print("No Buy or Sell signal")
+            if self.zscore_20_5.iloc[-1] < -1:
+                self.current_signal = "Buy"
+            elif self.zscore_20_5.iloc[-1] > 1:
+                self.current_signal = "Sell"
+                #else:
+                 #   print("No Buy or Sell signal")
+
+            price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
+            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
+            new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
+
+            # Only produce a signal if there is a change in the signal
+            # This will result in alternating buy and sell signals
+            # Signal has changed to buy
+            if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
+                print("Buy signal")
+                # Buy Future and Sell ETF
+
+                self.ask_id = next(self.order_ids)
+                self.ask_price = new_ask_price
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.asks.add(self.ask_id)
+                print("Order sent to order book")
+                # Set previous signal for later use
+                self.previous_signal = "Buy"
+
+            # Signal has changed to sell
+            elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
+                print("Sell signal")
+                # Sell Future and Buy ETF
+
+                self.bid_id = next(self.order_ids)
+                self.bid_price = new_bid_price
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.bids.add(self.bid_id)
+
+                print("Order sent to order book")
+                # Set previous signal for later use
+                self.previous_signal = "Sell"
+            
+            # Signal has changed to No signal
+            #elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
+                #print("No signal")
+                #self.previous_signal = "No signal"
 
         except Exception as e:
-            print("Exception")
-            print(e)
+            print("Error: ", e)
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
