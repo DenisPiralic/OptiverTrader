@@ -111,10 +111,10 @@ class AutoTrader(BaseAutoTrader):
                 self.last_zscore = self.zscore.iloc[-1]
 
                 # Buy signal
-                if self.last_zscore < -1:
+                if self.last_zscore < -1.25:
                     self.current_signal = "Buy"
                 # Sell signal
-                elif self.last_zscore > 1:
+                elif self.last_zscore > 1.25:
                     self.current_signal = "Sell"
                 
                 # Neither buy nor sell
