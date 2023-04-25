@@ -80,17 +80,22 @@ class AutoTrader(BaseAutoTrader):
         """
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
                         sequence_number)
+        # Try... Except used to report errors in the console since the autotrader class does not
+        # flag errors by default
         try:
             # Generate midpoint price
+            # Dividing by 200 gets expected prices
             self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 200.0)
 
             # Add midpoint to the instrument price Series
             # Instrument 0 means future price
             if instrument == 0:
+                # Using concat to create a new series that contains the new price value
                 self.future_price = pd.concat([self.future_price, self.midpoint_price], ignore_index=True)
 
             # Instrument 1 means ETF price
             else:
+                # Using concat to create a new series that contains the new price value
                 self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
 
             # Find the price ratio of the Future and ETF price
@@ -104,23 +109,24 @@ class AutoTrader(BaseAutoTrader):
             self.zscore = ((self.ratio - self.ratio.mean()) / self.ratio.std())[:-1]
 
             # Buy and Sell signals
-            # Whenever the z score is more than negative 1 we buy and whenever the z score is less than
-            # 1 we sell
+            # Whenever the z score is less than -1.25 we buy and whenever the z score is greater than
+            # 1.25 we sell
             if self.zscore.size > 0:
                 # Get the last ZScore
                 self.last_zscore = self.zscore.iloc[-1]
 
                 # Buy signal
                 if self.last_zscore < -1.25:
+                    # Record the current signal
                     self.current_signal = "Buy"
                 # Sell signal
                 elif self.last_zscore > 1.25:
+                    # Record the current signal
                     self.current_signal = "Sell"
-                
-                # Neither buy nor sell
-                #else:
-                    #self.current_signal = "No signal"
 
+            # Boilerplate code that sets the bid and ask price
+            # There is the potential to optimise here if a better price can be calculated and here is also
+            # where we can look into volume
             price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
             new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
@@ -132,10 +138,14 @@ class AutoTrader(BaseAutoTrader):
                 print("Buy signal")
                 # Buy Future and Sell ETF
 
+                # Boilerplate code to create a fill and kill order
                 self.ask_id = next(self.order_ids)
                 self.ask_price = new_ask_price
+                # Changing the order type is a possible area of optimisation - currently a FILL_AND_KIll order
+                # is being used
                 self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
                 self.asks.add(self.ask_id)
+
                 print("Order sent to order book")
                 # Set previous signal for later use
                 self.previous_signal = "Buy"
@@ -145,19 +155,17 @@ class AutoTrader(BaseAutoTrader):
                 print("Sell signal")
                 # Sell Future and Buy ETF
 
+                # Boilerplate code to create a fill and kill order
                 self.bid_id = next(self.order_ids)
                 self.bid_price = new_bid_price
+                # Changing the order type is a possible area of optimisation - currently a FILL_AND_KILL order
+                # is being used
                 self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
                 self.bids.add(self.bid_id)
 
                 print("Order sent to order book")
                 # Set previous signal for later use
                 self.previous_signal = "Sell"
-            
-            # Signal has changed to No signal
-            #elif self.current_signal == "No signal" and self.previous_signal != self.current_signal:
-                #print("No signal")
-                #self.previous_signal = "No signal"
 
         except Exception as e:
             print(e)
