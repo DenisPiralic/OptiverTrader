@@ -17,8 +17,6 @@
 #     <https://www.gnu.org/licenses/>.
 import asyncio
 import itertools
-import pandas as pd
-#import numpy as np
 import math
 
 from typing import List
@@ -42,18 +40,17 @@ class AutoTrader(BaseAutoTrader):
         self.asks = set()
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
 
-        # Pandas series to hold midpoint prices for future and etf
-        #self.future_price = pd.Series(dtype='float64')
-        #self.etf_price = pd.Series(dtype='float64')
-        self.future_price = []
-        self.etf_price = []
+        # Variables to hold latest midpoint price for future and etf
+        self.future_price = None
+        self.etf_price = None
 
-        # Pandas series to hold ratios
-        #self.ratios = pd.Series(dtype='float64')
+        # Array to hold ratios
         self.ratios = []
 
+        # Variable to hold sum of ratios
         self.ratios_sum = 0
 
+        # Variable to hold denominator of standard deviation equation
         self.standard_deviation_sum = 0
 
         # Two variables to hold previous and current sell signal
@@ -96,50 +93,42 @@ class AutoTrader(BaseAutoTrader):
         try:
             # Generate midpoint price
             # Dividing by 200 gets expected prices
-            #self.midpoint_price = pd.Series((bid_prices[0] + ask_prices[0]) / 200.0)
             self.midpoint_price = (bid_prices[0] + ask_prices[0]) / 200.0
 
-            # Add midpoint to the instrument price Series
+            # Add midpoint to the instrument price array
             # Instrument 0 means future price
             if instrument == 0:
-                # Using concat to create a new series that contains the new price value
-                #self.future_price = pd.concat([self.future_price, self.midpoint_price], ignore_index=True)
-                self.future_price.append(self.midpoint_price)
+                #self.future_price.append(self.midpoint_price)
+                self.future_price = self.midpoint_price
 
             # Instrument 1 means ETF price
             else:
-                # Using concat to create a new series that contains the new price value
-                #self.etf_price = pd.concat([self.etf_price, self.midpoint_price], ignore_index=True)
-                self.etf_price.append(self.midpoint_price)
+                #self.etf_price.append(self.midpoint_price)
+                self.etf_price = self.midpoint_price
 
-            # Find the price ratio of the Future and ETF price
+            # Find the latest price ratio of the Future and ETF price
             # Future / ETF
-            # Removing anomalous first and last value
-            #self.new_ratio = pd.Series(self.future_price.iloc[-1] / self.etf_price.iloc[-1])
-            self.new_ratio = self.future_price[-1] / self.etf_price[-1]
-            #self.ratios = pd.concat([self.ratios, self.new_ratio], ignore_index=True)
+            self.new_ratio = self.future_price / self.etf_price
+            # Add new ratio to array of ratios
             self.ratios.append(self.new_ratio)
+            # Increase ratio sum by the new ratio value
             self.ratios_sum += self.new_ratio
 
 
             # Calculate Z-score of the ratio
-            # Removing final anomalous result
-            #self.zscore = ((self.ratio - self.ratio.mean()) / self.ratio.std())[:-1]
+            # Calculate the mean of the ratios
             self.mean = self.ratios_sum / len(self.ratios)
 
+            #Calculate the standard deviation
             self.standard_deviation_sum += (self.new_ratio - self.mean) ** 2
-
             self.standard_deviation = math.sqrt((self.standard_deviation_sum) / len(self.ratios))
 
+            # Calculate the new z_score indicator
             self.zscore = (self.new_ratio - self.mean) / self.standard_deviation
 
             # Buy and Sell signals
             # Whenever the z score is less than -1.25 we buy and whenever the z score is greater than
             # 1.25 we sell
-            #if self.zscore.size > 0:
-                # Get the last ZScore
-                #self.last_zscore = self.zscore.iloc[-1]
-
             # Buy signal
             if self.zscore < -1.25:
                 # Record the current signal
