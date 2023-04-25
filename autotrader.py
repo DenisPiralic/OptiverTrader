@@ -45,6 +45,9 @@ class AutoTrader(BaseAutoTrader):
         self.future_price = pd.Series(dtype='float64')
         self.etf_price = pd.Series(dtype='float64')
 
+        # Pandas series to hold ratios
+        self.ratios = pd.Series(dtype='float64')
+
         # Two variables to hold previous and current sell signal
         self.previous_signal = None
         self.current_signal = None
@@ -101,7 +104,8 @@ class AutoTrader(BaseAutoTrader):
             # Find the price ratio of the Future and ETF price
             # Future / ETF
             # Removing anomalous first and last value
-            self.ratio = self.future_price[1:-1] / self.etf_price[1:-1]
+            self.new_ratio = pd.Series(self.future_price.iloc[-1] / self.etf_price.iloc[-1])
+            self.ratios = pd.concat([self.ratios, self.new_ratio], ignore_index=True)
 
 
             # Calculate Z-score of the ratio
