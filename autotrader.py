@@ -45,7 +45,7 @@ class AutoTrader(BaseAutoTrader):
         self.etf_price = None
 
         # Array to hold ratios
-        self.ratios = []
+        self.ratios_length = 0
 
         # Variable to hold sum of ratios
         self.ratios_sum = 0
@@ -110,18 +110,18 @@ class AutoTrader(BaseAutoTrader):
             # Future / ETF
             self.new_ratio = self.future_price / self.etf_price
             # Add new ratio to array of ratios
-            self.ratios.append(self.new_ratio)
+            self.ratios_length += 1
             # Increase ratio sum by the new ratio value
             self.ratios_sum += self.new_ratio
 
 
             # Calculate Z-score of the ratio
             # Calculate the mean of the ratios
-            self.mean = self.ratios_sum / len(self.ratios)
+            self.mean = self.ratios_sum / self.ratios_length
 
             #Calculate the standard deviation
             self.standard_deviation_sum += (self.new_ratio - self.mean) ** 2
-            self.standard_deviation = math.sqrt((self.standard_deviation_sum) / len(self.ratios))
+            self.standard_deviation = math.sqrt((self.standard_deviation_sum) / self.ratios_length)
 
             # Calculate the new z_score indicator
             self.zscore = (self.new_ratio - self.mean) / self.standard_deviation
