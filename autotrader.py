@@ -25,9 +25,9 @@ from typing import List
 
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
-STRONG_INDICATOR = 2.25
+STRONG_INDICATOR = 2
 MEDIUM_INDICATOR = 1.5
-WEAK_INDICATOR = 1.25
+WEAK_INDICATOR = 1
 LOT_SIZE = 10
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
@@ -148,13 +148,6 @@ class AutoTrader(BaseAutoTrader):
 
             self.zscore = (self.new_ratio - self.mean) / self.standard_deviation
 
-            # Buy and Sell signals
-            # Whenever the z score is less than -1.25 we buy and whenever the z score is greater than
-            # 1.25 we sell
-            #if self.zscore.size > 0:
-                # Get the last ZScore
-                #self.last_zscore = self.zscore.iloc[-1]
-
             
             #see what troph we are located in
             if self.zscore < 0 and self.SellingTroph == True:
@@ -175,6 +168,12 @@ class AutoTrader(BaseAutoTrader):
                 self.ActiveOrders.update({"MediumBuy":False})
                 self.ActiveOrders.update({"LowBuy":False})
 
+
+
+
+
+            
+
             #only need to concern ourselves with any buying or selling if self.zscore is above our indicator
             if abs(self.zscore) >= WEAK_INDICATOR:
                 print(self.zscore)
@@ -194,15 +193,15 @@ class AutoTrader(BaseAutoTrader):
                     VolumeToBuy = K*WEAK_INDICATOR
                 
                 VolumeToBuy = int(VolumeToBuy)
-                
+
                 # Boilerplate code that sets the bid and ask price
                 # There is the potential to optimise here if a better price can be calculated and here is also
                 # where we can look into volume
                 price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
                 new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
                 new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
-
                 
+
                 orderSend = False
                 #if we are in the buying zone
                 if self.BuyingTroph:
@@ -221,15 +220,16 @@ class AutoTrader(BaseAutoTrader):
                         print("First weak buy of the troph")
                         orderSend = True
                         self.ActiveOrders.update({"WeakBuy":True})
-
-                    if orderSend:
+                    
+                    
+                    
+                    if orderSend:                     
                         #BUY ORDER
                         self.bid_id = next(self.order_ids)
-                        self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
                         self.bid_price = new_bid_price
-                        #self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
-                        print("Order Filled!")
+                        self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
                         self.bids.add(self.bid_id)
+                        print("buy order filled")
 
                 elif self.SellingTroph:
                     if signal_strength == STRONG_INDICATOR  and self.ActiveOrders["StrongSell"] == False:
@@ -253,8 +253,8 @@ class AutoTrader(BaseAutoTrader):
                         self.ask_id = next(self.order_ids)
                         self.ask_price = new_ask_price
                         self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
-                        print("order filled")
                         self.asks.add(self.ask_id)
+                        print("sell order filled")
 
            
         except Exception as e:
