@@ -25,7 +25,9 @@ from typing import List
 
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
-
+STRONG_INDICATOR = 2.25
+MEDIUM_INDICATOR = 1.5
+WEAK_INDICATOR = 1.25
 LOT_SIZE = 10
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
@@ -59,6 +61,19 @@ class AutoTrader(BaseAutoTrader):
         # Two variables to hold previous and current sell signal
         self.previous_signal = None
         self.current_signal = None
+
+
+        #lot tracker
+        self.BuyingTroph = True
+        self.SellingTroph = False
+        self.ActiveOrders = {
+            "StrongBuy": False,
+            "MediumBuy": False,
+            "WeakBuy":False,
+            "StrongSell":False,
+            "MediumSell":False,
+            "WeakSell":False
+            }
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -140,58 +155,108 @@ class AutoTrader(BaseAutoTrader):
                 # Get the last ZScore
                 #self.last_zscore = self.zscore.iloc[-1]
 
-            # Buy signal
-            if self.zscore < -1.25:
-                # Record the current signal
-                self.current_signal = "Buy"
-            # Sell signal
-            elif self.zscore > 1.25:
-                # Record the current signal
-                self.current_signal = "Sell"
+            
+            #see what troph we are located in
+            if self.zscore < 0 and self.SellingTroph == True:
+                print("switching troph to negative")
+                self.BuyingTroph = True
+                self.SellingTroph = False
+                #if we have entered the buying troph, we can make sell trades again
+                self.ActiveOrders.update({"StrongSell":False})
+                self.ActiveOrders.update({"MediumSell":False})
+                self.ActiveOrders.update({"LowSell":False})
 
-            # Boilerplate code that sets the bid and ask price
-            # There is the potential to optimise here if a better price can be calculated and here is also
-            # where we can look into volume
-            price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
-            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
-            new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
+            elif self.zscore > 0 and self.BuyingTroph == True:
+                print("switching troph to positive")
+                self.SellingTroph = True
+                self.BuyingTroph = False
+                #if we have entered the selling troph, we can make buy trades again
+                self.ActiveOrders.update({"StrongBuy":False})
+                self.ActiveOrders.update({"MediumBuy":False})
+                self.ActiveOrders.update({"LowBuy":False})
 
-            # Only produce a signal if there is a change in the signal
-            # This will result in alternating buy and sell signals
-            # Signal has changed to buy
-            if self.current_signal == "Buy" and self.previous_signal != self.current_signal:
-                print("Buy signal")
-                # Buy Future and Sell ETF
+            #only need to concern ourselves with any buying or selling if self.zscore is above our indicator
+            if abs(self.zscore) >= WEAK_INDICATOR:
+                print(self.zscore)
+                #SIGNAL STRENGTH AND VOLUME
+                signal_strength = 0
+                VolumeToBuy = 0
+                #the direct constant will be found by saying that the base lot-size will be traded at the lowest indicator
+                K=LOT_SIZE/WEAK_INDICATOR
+                if abs(self.zscore) >= STRONG_INDICATOR:
+                    signal_strength = STRONG_INDICATOR
+                    VolumeToBuy = K*STRONG_INDICATOR
+                elif abs(self.zscore) >= MEDIUM_INDICATOR:
+                    signal_strength = MEDIUM_INDICATOR
+                    VolumeToBuy = K*MEDIUM_INDICATOR
+                else:
+                    signal_strength = WEAK_INDICATOR
+                    VolumeToBuy = K*WEAK_INDICATOR
+                
+                VolumeToBuy = int(VolumeToBuy)
+                
+                # Boilerplate code that sets the bid and ask price
+                # There is the potential to optimise here if a better price can be calculated and here is also
+                # where we can look into volume
+                price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
+                new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
+                new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
 
-                # Boilerplate code to create a fill and kill order
-                self.ask_id = next(self.order_ids)
-                self.ask_price = new_ask_price
-                # Changing the order type is a possible area of optimisation - currently a FILL_AND_KIll order
-                # is being used
-                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
-                self.asks.add(self.ask_id)
+                
+                orderSend = False
+                #if we are in the buying zone
+                if self.BuyingTroph:
+                    #make sure whatever the signal strength, that we havent already got an active order whilst in the same troph
+                    if signal_strength == STRONG_INDICATOR  and self.ActiveOrders["StrongBuy"] == False:
+                        orderSend = True
+                        self.ActiveOrders.update({"StrongBuy":True})
+                        print("FirstStrongBUY of the troph")
+                    elif signal_strength == MEDIUM_INDICATOR and self.ActiveOrders["MediumBuy"] == False:
+                        #MEDIUM BUY ORDER
+                        orderSend = True
+                        self.ActiveOrders.update({"MediumBuy":True})
+                        print("First medium buy of the troph")
+                    elif signal_strength == WEAK_INDICATOR and self.ActiveOrders["WeakBuy"] == False:
+                        #WEAK BUY ORDER
+                        print("First weak buy of the troph")
+                        orderSend = True
+                        self.ActiveOrders.update({"WeakBuy":True})
 
-                print("Order sent to order book")
-                # Set previous signal for later use
-                self.previous_signal = "Buy"
+                    if orderSend:
+                        #BUY ORDER
+                        self.bid_id = next(self.order_ids)
+                        self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
+                        self.bid_price = new_bid_price
+                        #self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
+                        print("Order Filled!")
+                        self.bids.add(self.bid_id)
 
-            # Signal has changed to sell
-            elif self.current_signal == "Sell" and self.previous_signal != self.current_signal:
-                print("Sell signal")
-                # Sell Future and Buy ETF
+                elif self.SellingTroph:
+                    if signal_strength == STRONG_INDICATOR  and self.ActiveOrders["StrongSell"] == False:
+                        #STRONG SELL ORDER
+                        print("First strong sell of the troph")
+                        orderSend = True
+                        self.ActiveOrders.update({"StrongSell":True})
+                    elif signal_strength == MEDIUM_INDICATOR and self.ActiveOrders["MediumSell"] == False:
+                        #MEDIUM SELL ORDER
+                        print("First medium sell of the troph")
+                        orderSend = True
+                        self.ActiveOrders.update({"MediumSell":True})
+                    elif signal_strength == WEAK_INDICATOR and self.ActiveOrders["WeakSell"] == False:
+                        #WEAK SELL ORDER
+                        print("First weak sell of the troph")
+                        orderSend = True
+                        self.ActiveOrders.update({"WeakSell":True})
 
-                # Boilerplate code to create a fill and kill order
-                self.bid_id = next(self.order_ids)
-                self.bid_price = new_bid_price
-                # Changing the order type is a possible area of optimisation - currently a FILL_AND_KILL order
-                # is being used
-                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
-                self.bids.add(self.bid_id)
+                    if orderSend:
+                        #STRONG SELL ORDER
+                        self.ask_id = next(self.order_ids)
+                        self.ask_price = new_ask_price
+                        self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, VolumeToBuy, Lifespan.FILL_AND_KILL)
+                        print("order filled")
+                        self.asks.add(self.ask_id)
 
-                print("Order sent to order book")
-                # Set previous signal for later use
-                self.previous_signal = "Sell"
-
+           
         except Exception as e:
             print(e)
 
