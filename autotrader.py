@@ -136,13 +136,13 @@ class AutoTrader(BaseAutoTrader):
             VolumeToOrder = BASE_LOT_SIZE
 
             #see the volume based on z score
-            K=BASE_LOT_SIZE/LOW_INDICATOR
+            K=10
             if abs(self.zscore) >= STRONG_INDICATOR:
-                VolumeToOrder = K*STRONG_INDICATOR
+                VolumeToOrder = BASE_LOT_SIZE + 2*K
             elif abs(self.zscore) >= MEDIUM_INDICATOR:
-                VolumeToOrder = K*MEDIUM_INDICATOR
+                VolumeToOrder = BASE_LOT_SIZE + K
             elif abs(self.zscore) >= LOW_INDICATOR:
-                VolumeToOrder = K*LOW_INDICATOR
+                VolumeToOrder = BASE_LOT_SIZE
 
             VolumeToOrder = int(VolumeToOrder)
 
