@@ -151,7 +151,6 @@ class AutoTrader(BaseAutoTrader):
             
             #see what troph we are located in
             if self.zscore < 0 and self.SellingTroph == True:
-                print("switching troph to negative")
                 self.BuyingTroph = True
                 self.SellingTroph = False
                 #if we have entered the buying troph, we can make sell trades again
@@ -160,7 +159,6 @@ class AutoTrader(BaseAutoTrader):
                 self.ActiveOrders.update({"LowSell":False})
 
             elif self.zscore > 0 and self.BuyingTroph == True:
-                print("switching troph to positive")
                 self.SellingTroph = True
                 self.BuyingTroph = False
                 #if we have entered the selling troph, we can make buy trades again
@@ -168,11 +166,6 @@ class AutoTrader(BaseAutoTrader):
                 self.ActiveOrders.update({"MediumBuy":False})
                 self.ActiveOrders.update({"LowBuy":False})
 
-
-
-
-
-            
 
             #only need to concern ourselves with any buying or selling if self.zscore is above our indicator
             if abs(self.zscore) >= WEAK_INDICATOR:
@@ -193,7 +186,7 @@ class AutoTrader(BaseAutoTrader):
                     VolumeToBuy = K*WEAK_INDICATOR
                 
                 VolumeToBuy = int(VolumeToBuy)
-
+             
                 # Boilerplate code that sets the bid and ask price
                 # There is the potential to optimise here if a better price can be calculated and here is also
                 # where we can look into volume
