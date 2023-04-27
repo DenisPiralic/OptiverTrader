@@ -24,7 +24,11 @@ from typing import List
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
 
-LOT_SIZE = 10
+LOW_INDICATOR = 1.25
+MEDIUM_INDICATOR = 1.75
+STRONG_INDICATOR = 2.25
+
+BASE_LOT_SIZE = 40
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
 MIN_BID_NEAREST_TICK = (MINIMUM_BID + TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
@@ -128,24 +132,38 @@ class AutoTrader(BaseAutoTrader):
             # Calculate the new z_score indicator
             self.zscore = (self.new_ratio - self.mean) / self.standard_deviation
 
-            # Buy and Sell signals
-            # Whenever the z score is less than -1.25 we buy and whenever the z score is greater than
-            # 1.25 we sell
-            # Buy signal
-            if self.zscore < -1.25:
+
+            VolumeToOrder = BASE_LOT_SIZE
+
+            #see the volume based on z score
+            K=BASE_LOT_SIZE/LOW_INDICATOR
+            if abs(self.zscore) >= STRONG_INDICATOR:
+                VolumeToOrder = K*STRONG_INDICATOR
+            elif abs(self.zscore) >= MEDIUM_INDICATOR:
+                VolumeToOrder = K*MEDIUM_INDICATOR
+            elif abs(self.zscore) >= LOW_INDICATOR:
+                VolumeToOrder = K*LOW_INDICATOR
+
+            VolumeToOrder = int(VolumeToOrder)
+
+
+            #see if its a buy or sell signal
+            if self.zscore < -LOW_INDICATOR:
                 # Record the current signal
                 self.current_signal = "Buy"
-            # Sell signal
-            elif self.zscore > 1.25:
+            
+            elif self.zscore > LOW_INDICATOR:
                 # Record the current signal
                 self.current_signal = "Sell"
 
             # Boilerplate code that sets the bid and ask price
             # There is the potential to optimise here if a better price can be calculated and here is also
             # where we can look into volume
-            price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
+            price_adjustment = - (self.position // VolumeToOrder) * TICK_SIZE_IN_CENTS
             new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
+
+            
 
             # Only produce a signal if there is a change in the signal
             # This will result in alternating buy and sell signals
@@ -159,7 +177,7 @@ class AutoTrader(BaseAutoTrader):
                 self.ask_price = new_ask_price
                 # Changing the order type is a possible area of optimisation - currently a FILL_AND_KIll order
                 # is being used
-                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, VolumeToOrder, Lifespan.FILL_AND_KILL)
                 self.asks.add(self.ask_id)
 
                 print("Order sent to order book")
@@ -176,7 +194,7 @@ class AutoTrader(BaseAutoTrader):
                 self.bid_price = new_bid_price
                 # Changing the order type is a possible area of optimisation - currently a FILL_AND_KILL order
                 # is being used
-                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToOrder, Lifespan.FILL_AND_KILL)
                 self.bids.add(self.bid_id)
 
                 print("Order sent to order book")
