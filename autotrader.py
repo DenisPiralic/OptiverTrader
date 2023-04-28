@@ -28,7 +28,7 @@ LOW_INDICATOR = 1.25
 MEDIUM_INDICATOR = 1.75
 STRONG_INDICATOR = 2.25
 
-BASE_LOT_SIZE = 10
+BASE_LOT_SIZE = 20
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
 MIN_BID_NEAREST_TICK = (MINIMUM_BID + TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
@@ -159,7 +159,7 @@ class AutoTrader(BaseAutoTrader):
             # Boilerplate code that sets the bid and ask price
             # There is the potential to optimise here if a better price can be calculated and here is also
             # where we can look into volume
-            price_adjustment = - (self.position // BASE_LOT_SIZE) * TICK_SIZE_IN_CENTS
+            price_adjustment = - (self.position // VolumeToOrder) * TICK_SIZE_IN_CENTS
             new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
 
@@ -177,7 +177,7 @@ class AutoTrader(BaseAutoTrader):
                 self.ask_price = new_ask_price
                 # Changing the order type is a possible area of optimisation - currently a FILL_AND_KIll order
                 # is being used
-                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, BASE_LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, VolumeToOrder, Lifespan.FILL_AND_KILL)
                 self.asks.add(self.ask_id)
 
                 print("Order sent to order book")
@@ -194,7 +194,7 @@ class AutoTrader(BaseAutoTrader):
                 self.bid_price = new_bid_price
                 # Changing the order type is a possible area of optimisation - currently a FILL_AND_KILL order
                 # is being used
-                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, BASE_LOT_SIZE, Lifespan.FILL_AND_KILL)
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, VolumeToOrder, Lifespan.FILL_AND_KILL)
                 self.bids.add(self.bid_id)
 
                 print("Order sent to order book")
